@@ -1,0 +1,59 @@
+version: "3.3"
+services:
+  socketioserver:
+    build: ./Utilities/SocketIOServer
+    expose:
+      - "5000"
+    volumes:
+      - type: bind
+        source: ./Utilities/SocketIOServer/Server
+        target: /usr/src/app/Server
+  openaigym:
+    build: ./Clients/OpenAIGym
+    links:
+      - socketioserver
+    depends_on:
+      - socketioserver
+      - agent
+    environment:
+      - SOCKETIOSERVER_NAME=socketioserver
+      - SOCKETIOSERVER_PORT=5000
+    volumes:
+      - type: volume
+        source: shared
+        target: /shared
+        volume:
+          nocopy: false
+      - type: bind
+        source: ./Utilities/MessageUtilities
+        target: /shared/MessageUtilities
+      - type: bind
+        source: ./Clients/OpenAIGym/OpenAIGym
+        target: /usr/src/app/OpenAIGym
+
+  agent:
+    build: ./Agents/A2C
+    ports:
+      - 6006:6006
+    links:
+      - socketioserver
+    depends_on:
+      - socketioserver
+    environment:
+      - SOCKETIOSERVER_NAME=socketioserver
+      - SOCKETIOSERVER_PORT=5000
+    volumes:
+      - type: volume
+        source: shared
+        target: /shared
+        volume:
+          nocopy: false
+      - type: bind
+        source: ./Utilities/MessageUtilities
+        target: /shared/MessageUtilities
+      - type: bind
+        source: ./Agents/A2C/baselines
+        target: /usr/src/app/baselines
+volumes:
+  shared:
+
