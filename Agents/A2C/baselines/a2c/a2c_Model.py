@@ -15,19 +15,8 @@ from baselines import logger
 
 from baselines.a2c.utils import discount_with_dones
 from baselines.a2c.utils import Scheduler, make_path, find_trainable_variables
-from baselines.a2c.policies import CnnPolicy
 from baselines.a2c.utils import cat_entropy, mse
 
-
-try:
-    from SwarmAnalyticsUtility.MessageInterface import MESSAGETYP, MessageInterface
-    from SwarmAnalyticsUtility.CommunicationEnviroment import CommunicationEnviroment
-except ImportError:
-    import pip
-    pip.main(['install','-e','/shared/MessageUtilities'])
-    #print('Pip install SwarmAnalyticsUtility')
-    from SwarmAnalyticsUtility.MessageInterface import MESSAGETYP, MessageInterface
-    from SwarmAnalyticsUtility.CommunicationEnviroment import CommunicationEnviroment
 
 
 class Model(object):
@@ -36,6 +25,8 @@ class Model(object):
             ent_coef=0.01, vf_coef=0.5, max_grad_norm=0.5, lr=7e-4,
             alpha=0.99, epsilon=1e-5, total_timesteps=int(80e6), lrschedule='linear'):
         
+        
+
         config = tf.ConfigProto(allow_soft_placement=True,
                                 intra_op_parallelism_threads=num_procs,
                                 inter_op_parallelism_threads=num_procs)
@@ -47,6 +38,8 @@ class Model(object):
 
         #A = tf.placeholder(tf.int32, [nbatch])
         A = tf.placeholder(tf.int32, [nbatch,sum(ac_space)])
+        M =  tf.placeholder(tf.float32, [nbatch])
+
         A_cty, A_cnr, A_mty, A_msg, A_rew = tf.split(A,num_or_size_splits = ac_space, axis = 1)
 
         ADV = tf.placeholder(tf.float32, [nbatch])
@@ -64,23 +57,29 @@ class Model(object):
 
         #loss chat type
         cty_coef = 1/5
-        neglogpac_cty = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=train_model.cty, labels=A_cty)
-        pg_loss_cty = tf.reduce_mean(ADV * neglogpac_cty)
-        entropy_cty = tf.reduce_mean(cat_entropy(train_model.cty))
+        neglogpac_cty = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=train_model.cty, labels=tf.squeeze(A_cty,[1]))
+        #pg_loss_cty = tf.reduce_mean(ADV * neglogpac_cty)
+        pg_loss_cty = tf.reduce_sum(-1*ADV * neglogpac_cty*M)/tf.reduce_sum(M)
+        #entropy_cty = tf.reduce_mean(cat_entropy(train_model.cty))
+        entropy_cty= tf.reduce_sum(cat_entropy(train_model.cty)*M)/tf.reduce_sum(M)
         loss_cty = (pg_loss_cty - entropy_cty*ent_coef) * cty_coef
 
         #loss chat nr
         cnr_coef = 1/5
-        neglogpac_cnr = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=train_model.cnr, labels=A_cnr)
-        pg_loss_cnr = tf.reduce_mean(ADV * neglogpac_cnr)
-        entropy_cnr = tf.reduce_mean(cat_entropy(train_model.cnr))
+        neglogpac_cnr = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=train_model.cnr, labels=tf.squeeze(A_cnr,[1]))
+        #pg_loss_cnr = tf.reduce_mean(ADV * neglogpac_cnr)
+        pg_loss_cnr = tf.reduce_sum(-1*ADV * neglogpac_cnr*M)/tf.reduce_sum(M)
+        #entropy_cnr = tf.reduce_mean(cat_entropy(train_model.cnr))
+        entropy_cnr= tf.reduce_sum(cat_entropy(train_model.cnr)*M)/tf.reduce_sum(M)
         loss_cnr = (pg_loss_cnr - entropy_cnr*ent_coef) * cnr_coef
 
         #loss message type
         mty_coef = 1/5
-        neglogpac_mty = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=train_model.mty, labels=A_mty)
-        pg_loss_mty = tf.reduce_mean(ADV * neglogpac_mty)
-        entropy_mty = tf.reduce_mean(cat_entropy(train_model.mty))
+        neglogpac_mty = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=train_model.mty, labels=tf.squeeze(A_mty,[1]))
+        #pg_loss_mty = tf.reduce_mean(ADV * neglogpac_mty)
+        pg_loss_mty = tf.reduce_sum(-1*ADV * neglogpac_mty*M)/tf.reduce_sum(M)
+        #entropy_mty = tf.reduce_mean(cat_entropy(train_model.mty))
+        entropy_mty= tf.reduce_sum(cat_entropy(train_model.mty)*M)/tf.reduce_sum(M)
         loss_mty = (pg_loss_mty - entropy_mty*ent_coef) * mty_coef
 
 
@@ -90,18 +89,24 @@ class Model(object):
         mes_coef = 1/5
         # needs to be adjusted
         neglogpac_mes_1 = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=train_model.mes, labels=A_msg)
-        neglogpac_mes = tf.reduce_sum(neglogpac_mes_1 *  train_model.mask, [1,2]) /tf.reduce_sum(train_model.mask,[1,2])
-        pg_loss_mes = tf.reduce_mean(ADV * neglogpac_mes)
+        mask = tf.to_float(train_model.mask)
+        neglogpac_mes = tf.reduce_sum(neglogpac_mes_1 *  mask, [1]) /tf.reduce_sum(mask,[1])
+        #pg_loss_mes = tf.reduce_mean(ADV * neglogpac_mes)
+        pg_loss_mes = tf.reduce_sum(-1*ADV * neglogpac_mes*M)/tf.reduce_sum(M)
         # needs to be adjusted
-        entropy_mes_1 = tf.reduce_mean(cat_entropy(train_model.mes, dim = 2) * train_model.mask,[1,2])
-        entropy_mes = tf.reduce_mean(cat_entropy(train_model.mes))
+        cat_ent_mes = cat_entropy(train_model.mes, dim = 2) 
+        entropy_mes_1 = tf.reduce_sum(cat_ent_mes * mask,[1]) /tf.reduce_sum(mask,[1])
+        #entropy_mes = tf.reduce_mean(cat_entropy(train_model.mes))
+        entropy_mes = tf.reduce_sum(entropy_mes_1*M)/tf.reduce_sum(M)
         loss_mes = (pg_loss_mes - entropy_mes*ent_coef) * mes_coef
 
         #loss feedback reward
         rew_coef = 1/5
-        neglogpac_rew = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=train_model.rew, labels=A_rew)
-        pg_loss_rew = tf.reduce_mean(ADV * neglogpac_rew)
-        entropy_rew = tf.reduce_mean(cat_entropy(train_model.rew))
+        neglogpac_rew = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=train_model.rew, labels=tf.squeeze(A_rew,[1]))
+        #pg_loss_rew = tf.reduce_mean(ADV * neglogpac_rew)
+        pg_loss_rew = tf.reduce_sum(-1*ADV * neglogpac_rew*M)/tf.reduce_sum(M)
+        #entropy_rew = tf.reduce_mean(cat_entropy(train_model.rew))
+        entropy_rew= tf.reduce_sum(cat_entropy(train_model.rew)*M)/tf.reduce_sum(M)
         loss_rew = (pg_loss_rew - entropy_rew*ent_coef) * rew_coef
 
         pg_loss = loss_cty + loss_cnr + loss_mty + loss_mes + loss_rew
@@ -112,8 +117,26 @@ class Model(object):
         loss = pg_loss + vf_loss * vf_coef
         entropy = entropy_cty + entropy_cnr + entropy_mty + entropy_mes + entropy_rew
 
-        
+        tf.summary.scalar('neglogpac_cty',tf.reduce_mean(neglogpac_cty))
+        tf.summary.scalar('neglogpac_cnr',tf.reduce_mean(neglogpac_cnr))
+        tf.summary.scalar('neglogpac_mty',tf.reduce_mean(neglogpac_mty))
+        tf.summary.scalar('neglogpac_mes',tf.reduce_mean(neglogpac_mes))
+        tf.summary.scalar('neglogpac_rew',tf.reduce_mean(neglogpac_rew))
+        tf.summary.scalar('loss_cty',loss_cty)
+        tf.summary.scalar('loss_cnr',loss_cnr)
+        tf.summary.scalar('loss_mty',loss_mty)
+        tf.summary.scalar('loss_mes',loss_mes)
+        tf.summary.scalar('loss_rew',loss_rew)
+        tf.summary.scalar('entropy_cty',entropy_cty)
+        tf.summary.scalar('entropy_cnr',entropy_cnr)
+        tf.summary.scalar('entropy_mty',entropy_mty)
+        tf.summary.scalar('entropy_mes',entropy_mes)
+        tf.summary.scalar('entropy_rew',entropy_rew)
+        tf.summary.scalar('vf_loss',vf_loss)
         tf.summary.scalar('loss', loss)
+        tf.summary.scalar('avgDiscReward',tf.reduce_mean(R))
+        tf.summary.scalar('avgAdvantage',tf.reduce_mean(ADV))
+
         params = find_trainable_variables("model")
         grads = tf.gradients(loss, params)
         if max_grad_norm is not None:
@@ -126,31 +149,36 @@ class Model(object):
 
         merged = tf.summary.merge_all()
 
-        def train(obs, states, rewards, masks, actions, values):
-            advs = rewards - values
+        def train(obs, states, rewards, masks, actions, values,advantages):
+            advs = advantages #rewards - values
             for step in range(len(obs)):
                 cur_lr = lr.value()
-            td_map = {train_model.X:obs, A:actions, ADV:advs, R:rewards, LR:cur_lr}
+            td_map = {train_model.X:obs, A:actions, ADV:advs, R:rewards, LR:cur_lr, M: masks}
             if states != []:
                 td_map[train_model.S] = states
-                td_map[train_model.M] = masks
+                #td_map[train_model.M] = masks
             policy_loss, value_loss, policy_entropy, _ ,summary= sess.run(
                 [pg_loss, vf_loss, entropy, _train,merged],
                 td_map
             )
             return policy_loss, value_loss, policy_entropy, summary
 
-        def save(save_path):
+        def save(save_path, filename= 'saved.pkl'):
+            path = save_path + "/" + filename
             ps = sess.run(params)
             make_path(save_path)
-            joblib.dump(ps, save_path)
+            joblib.dump(ps, path)
+            print('Model is saved')
 
-        def load(load_path):
-            loaded_params = joblib.load(load_path)
-            restores = []
-            for p, loaded_p in zip(params, loaded_params):
-                restores.append(p.assign(loaded_p))
-            ps = sess.run(restores)
+        def load(load_path, filename= 'saved.pkl'):
+            path = load_path  + "/" +  filename
+            if osp.isfile(path):
+                loaded_params = joblib.load(path)
+                restores = []
+                for p, loaded_p in zip(params, loaded_params):
+                    restores.append(p.assign(loaded_p))
+                ps = sess.run(restores)
+                print('Model is loading')
 
         self.train = train
         self.train_model = train_model

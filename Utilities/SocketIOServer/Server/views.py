@@ -32,6 +32,23 @@ def hanlde_mymessage(json):
 
 @socketio.on('mymessage',namespace='/OpenAIGym')
 def hanlde_mymessage(json):
-    #print('Message:' + str(json))
-    #emit('mymessage', {'data':'IS ME the server.'}, broadcast=True)
     emit('mymessage',json,broadcast=True)
+
+
+@socketio.on('mymessage',namespace='/QATrainer')
+def hanlde_mymessage(json):
+    emit('mymessage',json,broadcast=True)
+
+
+@socketio.on('mymessage',namespace='/TinaBob')
+def hanlde_mymessage(json):
+    emit('mymessage',json,broadcast=True)
+
+
+@socketio.on('mymessage',namespace='/PythonEvaluation')
+def hanlde_mymessage(json):
+    emit('mymessage',json,broadcast=True)
+
+@socketio.on('mymessage',namespace='/InternReview')
+def hanlde_mymessage_Review(json):
+    emit('mymessage',json) 

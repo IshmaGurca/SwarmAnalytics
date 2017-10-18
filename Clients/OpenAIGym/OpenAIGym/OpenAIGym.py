@@ -1,14 +1,14 @@
 try:
     from SwarmAnalyticsUtility.SocketIOClient import SocketIOClient
-    from SwarmAnalyticsUtility.MessageInterface import MESSAGETYP, MessageInterface
-    from SwarmAnalyticsUtility.MessageInterface.Enum import FeedbackReward
+    from SwarmAnalyticsUtility.MessageInterface import  MessageInterface
+    from SwarmAnalyticsUtility.MessageInterface.Enums import FeedbackReward, MessageType
 except ImportError:
     import pip
     pip.main(['install','-e','/shared/MessageUtilities'])
     #print('Pip install SwarmAnalyticsUtility')
     from SwarmAnalyticsUtility.SocketIOClient import SocketIOClient
-    from SwarmAnalyticsUtility.MessageInterface import MESSAGETYP, MessageInterface
-    from SwarmAnalyticsUtility.MessageInterface.Enum import FeedbackReward
+    from SwarmAnalyticsUtility.MessageInterface import MessageInterface
+    from SwarmAnalyticsUtility.MessageInterface.Enums import FeedbackReward, MessageType
 import gym
 from uuid import uuid4
 import time
@@ -18,9 +18,10 @@ class OpenAIGym():
     def __init__ (self):
         self._socketIONamespaces = ['OpenAIGym']
         self._socketIOSenderID = uuid4()
-        self.env = gym.make('CartPole-v0')
+        self.env = gym.make('Copy-v0')
         self._socketIOClient = SocketIOClient(self._socketIONamespaces)
         self._actionSpace = self.env.action_space
+        self.MessageType = MessageType()
         self.RewardClass = FeedbackReward()
         self.RewardBounds = [-1,1]
     
@@ -31,11 +32,25 @@ class OpenAIGym():
     def On_OpenAIGym_Message(self,data):
         msg = MessageInterface.from_document(data)
         comID = msg.CommunicationID
-        if msg.MessageTyp == MESSAGETYP.ANSWER:
-            action = msg.Data
-            action = int(action[0])
-            self.act(action, comID)
+        doAction = True
+        if msg.MessageType == self.MessageType.Enum.ANSWER:
+            actionRaw = [int(a) for a in msg.Data]
+            if type(self.env.action_space.sample()) == tuple:
+                n = len(self.env.action_space.sample())
+                action = actionRaw[:n]
+                if self.env.action_space.contains(action) == False:
+                    doAction = False
+            else:
 
+                if int(actionRaw[0]) in range(self.env.action_space.n):
+                    action = int(actionRaw[0])
+                else:
+                    doAction = False
+
+            if doAction:
+                self.act(action, comID)
+            else:
+                self.canthandle(comID)
         else:
             self.canthandle(comID)
     
@@ -70,13 +85,17 @@ class OpenAIGym():
         self.emitObservation(ob,reward,False,comID)
 
     def emitObservation(self,Observation,Reward, Done,CommunicationID):
-        msgTyp = MESSAGETYP.OBERSAVATION
+        msgTyp = self.MessageType.Enum.OBERSAVATION
         nameSpace = self._socketIONamespaces[0]
         #convert observation from numpy to list and then to string
+        #print(Observation)
         if type(Observation) != str:
-            Observation = str(list(Observation))
+            if type(Observation)  == int:
+                Observation = str(Observation)
+            else:
+                Observation = str(list(Observation))
         obBody = Observation
-        Message = MessageInterface(self._socketIOSenderID, msgTyp,CommunicationID,Data = obBody, Reward = Reward, DoneFlag = Done)
+        Message = MessageInterface(nameSpace,self._socketIOSenderID, msgTyp,CommunicationID,Data = obBody, Reward = Reward, DoneFlag = Done)
         self._socketIOClient.emit(Message,nameSpace)
         #print('sendObservation')
         

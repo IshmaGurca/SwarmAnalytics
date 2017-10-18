@@ -6,7 +6,7 @@ from  SwarmAnalyticsUtility.MessageInterface.Enums.MessageType import MessageTyp
 
 class MessageInterface():
 
-    MaxLengthOfMessageBody = 500
+    MaxLengthOfMessageBody = 100
 
     def __init__(self,NameSpace,SenderID, MessageTypeEnum,CommunicationID = None,  MessageID = None, TimeStamp = None, Data = [], Reward = 0.0, DoneFlag = False):
         self.NameSpace = NameSpace
@@ -28,7 +28,7 @@ class MessageInterface():
 
     def to_document(self):
         return dict(
-            NameSpace = str(NameSpace),
+            NameSpace = str(self.NameSpace),
             MessageID = str(self.MessageID),
             MessageType = str(self.MessageType),
             SenderID = str(self.SenderID),
@@ -54,6 +54,6 @@ class MessageInterface():
         
         
         #Body = ast.literal_eval(str(document['Body']))
-        return cls(NameSpace,SenderID, MessageTyp, CommunicationID ,MessageID, TimeStamp , Data, Reward,DoneFlag )
+        return cls(NameSpace,SenderID, MessageType, CommunicationID ,MessageID, TimeStamp , Data, Reward,DoneFlag )
 
     

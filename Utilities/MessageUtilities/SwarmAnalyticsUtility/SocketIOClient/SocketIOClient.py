@@ -1,6 +1,7 @@
 from socketIO_client import SocketIO, BaseNamespace
 from SwarmAnalyticsUtility.MessageInterface import MessageInterface
 from uuid import uuid4
+import os
 
 class SocketIOClient():
 
@@ -9,7 +10,10 @@ class SocketIOClient():
     def __init__ (self, NameSpaces):
         self.MessageSenderID = uuid4()
         #get  socketserver and PORT from ENV variable!!!
-        self.SocketIO  = SocketIO('socketioserver', 5000)
+        server =  os.getenv('SOCKETIOSERVER_NAME')
+        port = os.getenv('SOCKETIOSERVER_PORT')
+        
+        self.SocketIO  = SocketIO(server, port)
       
         for name in NameSpaces:
            self._namespaces.append({'Name':name,'Class':self.SocketIO.define(BaseNamespace,'/' + name)})
@@ -23,7 +27,8 @@ class SocketIOClient():
         for name in [x for x in self._namespaces]:
             self.listenToNameSpace(name['Name'],handlerList[self._namespaces.index(name)])
 
-        self.SocketIO.wait(seconds=600)
+        #self.SocketIO.wait(seconds=600)
+        self.SocketIO.wait()
         
 
     def listenToNameSpace(self,NameSpaceName,handler, event = 'mymessage'):

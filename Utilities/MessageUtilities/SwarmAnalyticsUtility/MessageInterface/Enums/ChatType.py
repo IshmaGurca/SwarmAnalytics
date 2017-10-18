@@ -5,13 +5,14 @@ class ChatTypeEnum(Enum):
     AGENT = 0
     WORKER = 1
     KNOWLEDGEBASE = 2
+    REVIEW = 3
 
 
 class ChatType:
 
     def __init__(self):    
         self.Enum = ChatTypeEnum
-        self.n = len(self.Enum)
+        self.n = len(self.Enum) - 1
 
     def IndexToOneHot(self, indices):
         import tensorflow as tf
@@ -22,7 +23,7 @@ class ChatType:
         return tf.argmax(onehots,axis = 1)
 
     def IndexToEnum(self,indices):
-        return [x.Enum(i) for i in indices]
+        return [self.Enum(i) for i in indices]
 
     def EnumToIndex(self, enums):
         return np.asarray([e.value for e in enums])

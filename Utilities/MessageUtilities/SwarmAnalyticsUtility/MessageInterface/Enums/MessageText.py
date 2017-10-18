@@ -3,7 +3,7 @@ import numpy as np
 
 class MessageTextSettings:
     encoding = 'ascii'
-    NofChars = 256
+    NofChars = 128
     #List = [i for i in range(lowerBound,upperBound+1)]
    
 class MessageTextAdditionalEnum(Enum):
@@ -73,14 +73,24 @@ class MessageText:
         return self.IndexToText(indices)
 
     def PadIndex(self,indices, maxlength):
+        #print(type(indices))
+        ENDMESSAGE_index = self.Additions.ENDMESSAGE.value
+        n_indices = []
         for i,ind in enumerate(indices):
             #print(type(ind))
-            #indices[i] = ind + [1]            
-            indices[i] = ind + (np.zeros(maxlength-len(ind))-1).tolist()
-        return indices
+            #indices[i] = ind + [1]         
+            if    len(ind) < maxlength:
+                n_indices.append(np.lib.pad(ind,(0,maxlength-len(ind)), 'constant', constant_values=(ENDMESSAGE_index, ENDMESSAGE_index)).tolist())
+            else:
+                n_indices.append(ind.tolist()[:maxlength])
+
+        return np.asarray(n_indices)
 
     def MaskEndMessage(self, indices):
-        return [int(self.Additions.ENDMESSAGE.value != i) for i in indices]
+        import tensorflow as tf
+        end = tf.zeros(indices.shape,tf.int64) + self.Additions.ENDMESSAGE.value
+        return tf.to_int64(tf.not_equal(indices, end))
+        #return [int(self.Additions.ENDMESSAGE.value != i) for i in indices]
 
 
 if __name__ == "__main__":

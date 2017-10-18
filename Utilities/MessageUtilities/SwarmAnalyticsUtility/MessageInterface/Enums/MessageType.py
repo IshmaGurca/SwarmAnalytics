@@ -22,7 +22,9 @@ class MessageType:
         return tf.argmax(onehots,axis = 1)
 
     def IndexToEnum(self,indices):
-        return [x.Enum(i) for i in indices]
+        if type(indices) == np.ndarray:
+            indices = indices.tolist()
+        return [self.Enum(i) for i in indices]
 
     def EnumToIndex(self, enums):
         return np.asarray([e.value for e in enums])

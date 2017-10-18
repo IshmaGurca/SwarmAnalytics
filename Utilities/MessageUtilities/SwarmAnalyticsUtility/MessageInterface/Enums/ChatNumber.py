@@ -4,10 +4,10 @@ import numpy as np
 class ChatNumberEnum(Enum):
     CHATNR0 = 0
     CHATNR1 = 1
-    CHATNR2 = 2
-    CHATNR3 = 3
-    CHATNR4 = 4
-    CHATNR5 = 5
+    #CHATNR2 = 2
+    #CHATNR3 = 3
+    #CHATNR4 = 4
+    #CHATNR5 = 5
 
 
 class ChatNumber:
@@ -25,7 +25,7 @@ class ChatNumber:
         return tf.argmax(onehots,axis = 1)
 
     def IndexToEnum(self,indices):
-        return [x.Enum(i) for i in indices]
+        return [self.Enum(i) for i in indices]
 
     def EnumToIndex(self, enums):
         return np.asarray([e.value for e in enums])

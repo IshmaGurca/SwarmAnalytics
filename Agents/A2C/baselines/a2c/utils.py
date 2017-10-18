@@ -10,8 +10,17 @@ import numpy as np
 import tensorflow as tf
 from gym import spaces
 from collections import deque
+import random
 
 def sample(logits, dim = 1):
+    '''
+    eps = 0.20
+    rnd = random.random()
+    val = 1 if rnd > eps else 0
+    print(val)
+    noise = tf.random_uniform(tf.shape(logits))
+    return tf.argmax(logits * val + noise *(1-val), dim)
+    '''
     noise = tf.random_uniform(tf.shape(logits))
     return tf.argmax(logits - tf.log(-tf.log(noise)), dim)
 
@@ -108,8 +117,10 @@ def lstm(xs, ms, s, scope, nh, init_scale=1.0):
 LSTM to generate MSGS
 '''
 def mylstm(xi, i, s, scope, nh,env, init_scale=1.0):
-    nbatch, nin = [v.value for v in xs[0].get_shape()]
-    nsteps = len(xs)
+    #mask = []
+    #xs = []
+    x = env.MessageText.IndexToOneHot(xi)
+    nbatch, nin = [v.value for v in x.get_shape()]
     with tf.variable_scope(scope):
         wx = tf.get_variable("wx", [nin, nh*4], initializer=ortho_init(init_scale))
         wh = tf.get_variable("wh", [nh, nh*4], initializer=ortho_init(init_scale))
@@ -117,12 +128,17 @@ def mylstm(xi, i, s, scope, nh,env, init_scale=1.0):
 
     c, h = tf.split(axis=1, num_or_size_splits=2, value=s)
     m = [1 for i in range(nbatch)]
-    mask.append(m)
-    xs.append(h)
-    for idx in range(i):
-        x = env.MessageText.IndexToOneHot(xi)
-        c = c*(1-m)
-        h = h*(1-m)
+    mask = tf.to_int64(m)
+    xs = tf.to_float(x)
+    xs = tf.reshape(xs,[int(xs.shape[0]),1,int(xs.shape[1])])
+    mask = tf.reshape(mask,[int(mask.shape[0]),1])
+    for idx in range(i-1):
+        #c = c*(1-m)
+        #h = h*(1-m)
+        #print("x:" + str(x.shape))
+        #print("wx:" + str(wx.shape))
+        #print("h:" + str(h.shape))
+        #print("wh:" + str(wh.shape))
         z = tf.matmul(x, wx) + tf.matmul(h, wh) + b
         i, f, o, u = tf.split(axis=1, num_or_size_splits=4, value=z)
         i = tf.nn.sigmoid(i)
@@ -131,18 +147,43 @@ def mylstm(xi, i, s, scope, nh,env, init_scale=1.0):
         u = tf.tanh(u)
         c = f*c + i*u
         h = o*tf.tanh(c)
-        xs.append(h)
         #refeed x as softmax of h
         xi = sample(h)
+        x = env.MessageText.IndexToOneHot(xi)
         # if end of msg mask ???
-        m = m*env.MessageText.MaskEndMessage(xi)
-        mask.append(m)
+        mm = env.MessageText.MaskEndMessage(xi)
+        m = m*mm
+        hn = tf.reshape(h,[int(xs.shape[0]),1,int(xs.shape[2])])
+        mn = tf.reshape(m,[int(mask.shape[0]),1])
+        xs = tf.concat(values = [xs,hn],axis = 1)
+        mask = tf.concat(values=[mask,mn], axis = 1)
+
 
     s = tf.concat(axis=1, values=[c, h])
-
-    xs = tf.transpose(xs,[1,0,2])
-    mask = tf.transpose(mask,[1,0,2])
+    #xs = tf.transpose(xs,[1,0,2])
+    #mask = tf.transpose(mask,[1,0,2])
     return xs, s, mask
+
+def memCell(x,s,scope, nh, init_scale=1.0):
+    nbatch, nin = [v.value for v in x.get_shape()]
+    x = tf.to_float(x)
+    with tf.variable_scope(scope):
+        wx = tf.get_variable("wx", [nin, nh*4], initializer=ortho_init(init_scale))
+        wh = tf.get_variable("wh", [nh, nh*4], initializer=ortho_init(init_scale))
+        b = tf.get_variable("b", [nh*4], initializer=tf.constant_initializer(0.0))
+    c, h = tf.split(axis=1, num_or_size_splits=2, value=s)
+    
+    z = tf.matmul(x, wx) + tf.matmul(h, wh) + b
+    i, f, o, u = tf.split(axis=1, num_or_size_splits=4, value=z)
+    i = tf.nn.sigmoid(i)
+    f = tf.nn.sigmoid(f)
+    o = tf.nn.sigmoid(o)
+    u = tf.tanh(u)
+    c = f*c + i*u
+    h = o*tf.tanh(c)
+    s = tf.concat(axis=1, values=[c, h])
+
+    return h, s
 
 def _ln(x, g, b, e=1e-5, axes=[1]):
     u, s = tf.nn.moments(x, axes=axes, keep_dims=True)

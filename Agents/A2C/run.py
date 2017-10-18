@@ -5,13 +5,11 @@ from baselines.a2c.a2c import learn
 from baselines.a2c.policies import  MyPolicy
 
 try:
-    from SwarmAnalyticsUtility.MessageInterface import MESSAGETYP, MessageInterface
     from SwarmAnalyticsUtility.CommunicationEnviroment import CommunicationEnviroment
 except ImportError:
     import pip
     pip.main(['install','-e','/shared/MessageUtilities'])
     #print('Pip install SwarmAnalyticsUtility')
-    from SwarmAnalyticsUtility.MessageInterface import MESSAGETYP, MessageInterface
     from SwarmAnalyticsUtility.CommunicationEnviroment import CommunicationEnviroment
 
 
@@ -28,10 +26,14 @@ def train(policy, lrschedule):
     '''
     socketIONamespaces = {'AGENT':['OpenAIGym'],'WORKER':[], 'KNOWLEDGEBASE':[]}
 
+
     env = CommunicationEnviroment(socketIONamespaces)
+    
+    modelsavepath = os.getenv('MODELSAVE_PATH')
+    
     if policy == 'my':
         policy_fn = MyPolicy
-    learn(policy_fn, env, lrschedule=lrschedule)
+    learn(policy_fn, env, modelsavepath = modelsavepath, lrschedule=lrschedule, nsteps = 20)
 
 def main():
     import argparse
